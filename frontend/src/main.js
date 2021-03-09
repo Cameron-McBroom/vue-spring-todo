@@ -1,6 +1,7 @@
 import Vue from 'vue'
 import App from './App.vue'
 import './styles/main.css';
+import router from "@/routes/router";
 
 
 // Font awesome installation
@@ -31,4 +32,5 @@ Vue.directive('click-outside', {
 
 new Vue({
   render: h => h(App),
+  router
 }).$mount('#app')

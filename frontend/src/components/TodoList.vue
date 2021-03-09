@@ -1,77 +1,54 @@
 <template>
   <div class="Todo-List">
     <h1>Vue Spring Todo List</h1>
-    <div class="new-item">
-      <input
-          v-model="newTodo"
-          ref="newTask"
-          class="new-item-input"
-          type="text"
-          placeholder="Add a new todo.."
-          @keypress.enter="addNewTodo"
-      />
 
-      <div class="new-item-button" @click="addNewTodo">
-        <fa-icon class="new-item-button-icon" icon="plus"/>
-      </div>
-    </div>
+    <todo-list-add-item-bar @addTodo="addNewTodo" v-model="newTodo"/>
 
     <div class="task-list">
-
       <div
           :class="{task: true, done:item.done}"
-          v-for="(item, index) in items"
-          :key="index">
+          v-for="item in items"
+          :key="item.id">
 
-        <div class="task-check-box" :class="{checked: item.done}" @click="markTaskDone(index)">
-          <fa-icon v-if="item.done" class="task-check-box-icon" icon="check"/>
-        </div>
-
-        <div class="task-item" @click="editingIndex = index" >
-          <input
-              @blur="updateTask(index, $event.target.value)"
-              class="task-item-input"
-              :class="{disabled: editingIndex !== index}"
-              :value="item.item"/>
-        </div>
-
-        <div class="task-trash-button" @click="deleteTask(index)">
-          <fa-icon class="task-trash-icon" icon="trash"/>
-        </div>
+        <todo-list-item
+            :task="item"
+            @checked="markTaskDone(item.id)"
+            @delete="deleteTask(item.id)"
+            @update="updateTask(item.id)"/>
       </div>
+
     </div>
 
-    <div class="tasks-left-info">
-      <h3>You have {{incompleteTaskCount}} pending tasks </h3>
-      <button
-          v-if="items.length > 0"
-          class="tasks-left-clear-button"
-          @click="clearTasks">
-        Clear All
-      </button>
-    </div>
+    <todo-list-info
+        :task-count="items.length"
+        :incomplete-task-count="incompleteTaskCount"
+        @clear-all="clearTasks"/>
 
   </div>
 </template>
 
 <script>
+import TodoListAddItemBar from "@/components/TodoListAddItemBar";
+import TodoListItem from "@/components/TodoListItem";
+import TodoListInfo from "@/components/TodoListInfo";
+import taskApi from "@/tasks.api";
+
 export default {
   name: 'TodoList',
+  components: {TodoListInfo, TodoListItem, TodoListAddItemBar},
   props: {
     msg: String
   },
   data() {
     return {
       items: [
-        { item: "Feed the dog", done: false },
-        { item: "Do the shopping", done: false }
+        { id: 1, item: "Feed the dog", done: false },
       ],
       newTodo: "",
       editingIndex: null
     }
   },
   computed: {
-
     incompleteTaskCount() {
       return this.items.filter(item => !item.done).length;
     }
@@ -81,9 +58,12 @@ export default {
       const valid = this.validateNewTodo()
 
       if (valid) {
-        this.items.unshift({item: this.newTodo, done: false});
-        this.newTodo = "";
-        this.moveIncompleteItemsUp();
+        taskApi.addNewTask({name: this.newTodo})
+        .then(task => {
+          this.items.unshift(this.parseTask(task));
+          this.newTodo = "";
+          this.moveIncompleteItemsUp();
+        })
       } else  {
         this.focusOnInput();
       }
@@ -98,26 +78,48 @@ export default {
       this.$refs.newTask.focus();
 
     },
-    deleteTask(index) {
-      this.items.splice(index, 1)
+    deleteTask(id) {
+      let index = this.getTaskIndex(id);
+      taskApi.deleteTaskById(id)
+      .then(res => {
+        if (res.success === "true")
+          this.items.splice(index, 1)
+      })
     },
-
     clearTasks() {
       // TODO - Add in a notification for confirmation
-      this.items = [];
+      this.items.forEach((item, index) => {
+        taskApi.deleteTaskById(item.id)
+        .then(res => {
+          if (res.success === "true")
+            this.items.splice(index, 1)
+        })
+      })
     },
 
-    markTaskDone(index) {
-      this.items[index].done = !this.items[index].done
+    markTaskDone(id) {
+      let index = this.getTaskIndex(id)
 
-      this.moveIncompleteItemsUp();
+      taskApi.markComplete(id, !this.items[index].done)
+      .then(task => {
+        this.items[index].done = task.complete;
+        this.moveIncompleteItemsUp();
+      })
+      .catch(err => console.log(err))
     },
 
-    updateTask(index, update) {
+    updateTask(id, update) {
+      let index = this.getTaskIndex(id);
+
       const valid = this.validateNewTodo(update);
 
-      if (valid)
-        this.items[index].item = update;
+      if (valid) {
+        taskApi.updateTaskName(id, update)
+        .then(task => {
+          this.items[index].item = task.name;
+        })
+        .catch(err => console.log(err))
+      }
       else
         //Sets the field back to what was stored
         this.$forceUpdate();
@@ -136,9 +138,25 @@ export default {
       let temp = this.items[a]
       this.items[a] = this.items[b]
       this.items[b] = temp
-    }
-  }
+    },
 
+    getTaskIndex(id) {
+      return this.items.findIndex(item => item.id === id);
+    },
+    parseTask(task) {
+      return {
+        id: task.id,
+        item: task.name,
+        done: task.complete
+      }
+
+    }
+  },
+  beforeMount() {
+    taskApi.getTasks()
+        .then(tasks => this.items = tasks.map(task => this.parseTask(task)))
+        .catch(err => console.log(err))
+  }
 }
 </script>
 
@@ -157,169 +175,12 @@ h1 {
   text-align: left;
 }
 
-.new-item {
-  display: flex;
-  align-items: stretch;
-  width: 30rem;
-  height: 3rem;
-  margin: 0 auto;
-}
-.new-item-input {
-  flex: 1;
-  font-size: 18px;
-  border-radius: var(--border-radius-default);
-  padding: 0 8px;
-  border: var(--border-default);
-}
-
-.new-item-input:focus {
-  outline: none !important;
-  border-radius: var(--border-radius-default);
-  border: 1px solid var(--color-vue-green);
-  padding: 0 8px;
-}
-
-.new-item-button {
-  height: inherit;
-  background: var(--color-vue-green);
-  font-size: 20px;
-  margin-left: .5rem;
-  padding: 0 1rem;
-  border-radius: 5px;
-  cursor: pointer;
-  opacity: 0.6;
-  transition: 0.3s;
-}
-
-.new-item-button:hover {
-  opacity: 1;
-}
-
-.new-item-button-icon {
-  height: inherit;
-  color: #F8F8F8;
-}
-
 .task-list {
   margin-top: 1rem;
 }
 
-.task {
-  display: flex;
-  height: 50px;
-  margin-bottom: .5rem;
-}
-
-.task-item {
-  flex: 1;
-  margin-left: .5rem;
-}
-
-.task-check-box {
+.Todo-List-Info h3 {
   align-self: center;
-  height: 30px;
-  width: 30px;
-  border: 1px solid lightgrey;
-  border-radius: var(--border-radius-default);
-  background: #F8F8F8;
-}
-
-.task-check-box:hover {
-  background: lightgrey;
-  cursor: pointer;
-}
-
-.task-check-box.checked {
-  background: var(--color-vue-green);
-  opacity: 0.8;
-  border: none;
-  transition: 0.2s;
-}
-
-.task-check-box.checked:hover {
-  opacity: 1;
-}
-
-.task-check-box-icon {
-  height: inherit;
-}
-
-.task.done .task-item-input,  .task.done  .task-item-input:hover{
-  background: #F8F8F8;
-  cursor: default;
-  text-decoration-line: line-through;
-  color: darkgrey;
-}
-
-.task-item-input {
-  height: 100%;
-  width: 100%;
-  border: none;
-  background-color: #F8F8F8;
-  border-radius: var(--border-radius-default);
-  padding-left: 8px;
-  cursor: text;
-  color: var(--color-default);
-}
-
-.task-item-input:hover, .task-item-input.disabled:hover {
-  background: lightgrey;
-}
-
-
-.task-item-input:focus, .task-item-input:focus:hover {
-  outline: none;
-  background: white;
-}
-
-.task-trash-button {
-  height: inherit;
-  font-size: 20px;
-  margin-left: .5rem;
-  padding: 0 1rem;
-  background: none;
-  border-radius: var(--border-radius-default);
-  transition: 0.3s;
-}
-
-.task.done .task-trash-button {
-  color: darkgrey;
-}
-
-.task-trash-button:hover, .task.done .task-trash-button:hover {
-  background: var(--color-danger);
-  color: white;
-  cursor: pointer;
-  border-radius: var(--border-radius-default);
-}
-
-.task-trash-icon {
-  height: inherit;
-}
-
-.tasks-left-info {
-  display: flex;
-  justify-content: space-between;
-  height: 2rem;
-}
-
-.tasks-left-info h3 {
-  align-self: center;
-}
-
-.tasks-left-clear-button {
-  background: darkgrey;
-  border-radius: var(--border-radius-default);
-  color: white;
-  font-weight: bold;
-  border: none;
-  cursor: pointer;
-  opacity: 0.6;
-  transition: 0.3s;
-}
-
-.tasks-left-clear-button:hover {
-  opacity: 1;
 }
 
 </style>
