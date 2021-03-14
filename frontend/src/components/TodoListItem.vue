@@ -13,10 +13,12 @@
     <div class="task-item" @click="editingId = task.id" >
 
       <input
-          @blur="$emit('update', task.id, $event.target.value)"
+          ref="input"
+          @blur="updated"
           class="task-item-input"
           :class="{disabled: editingId !== task.id}"
-          :value="task.item"/>
+          :value="task.name"
+      />
 
     </div>
 
@@ -34,11 +36,17 @@ export default {
   name: "TodoListItem",
   data() {
     return {
-      editingId: null
+      editingId: null,
+      editedVal: "",
     }
   },
   props: {
     task: Object
+  },
+  methods: {
+    updated() {
+      this.$emit('update', this.$refs.input.value);
+    }
   }
 }
 </script>

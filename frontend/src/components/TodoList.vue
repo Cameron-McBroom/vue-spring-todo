@@ -14,7 +14,7 @@
             :task="item"
             @checked="markTaskDone(item.id)"
             @delete="deleteTask(item.id)"
-            @update="updateTask(item.id)"/>
+            @update="updateTask(item.id, $event)"/>
       </div>
 
     </div>
@@ -41,11 +41,8 @@ export default {
   },
   data() {
     return {
-      items: [
-        { id: 1, item: "Feed the dog", done: false },
-      ],
+      items: [],
       newTodo: "",
-      editingIndex: null
     }
   },
   computed: {
@@ -68,16 +65,19 @@ export default {
         this.focusOnInput();
       }
     },
-    validateNewTodo(optString) {
-      if (optString) return optString.length >= 1;
-
+    validateNewTodo(id, optString) {
+      // optional string means editing existing task
+      if (optString) {
+        // check it's greater than 1 character and not the same
+        return optString.length >= 1 && this.getTaskName(id) !== optString;
+      }
       return this.newTodo.length >= 1;
-
     },
+
     focusOnInput() {
       this.$refs.newTask.focus();
-
     },
+
     deleteTask(id) {
       let index = this.getTaskIndex(id);
       taskApi.deleteTaskById(id)
@@ -86,6 +86,7 @@ export default {
           this.items.splice(index, 1)
       })
     },
+
     clearTasks() {
       // TODO - Add in a notification for confirmation
       this.items.forEach((item, index) => {
@@ -116,7 +117,7 @@ export default {
       if (valid) {
         taskApi.updateTaskName(id, update)
         .then(task => {
-          this.items[index].item = task.name;
+          this.items[index].name = task.name;
         })
         .catch(err => console.log(err))
       }
@@ -143,10 +144,15 @@ export default {
     getTaskIndex(id) {
       return this.items.findIndex(item => item.id === id);
     },
+
+    getTaskName(id) {
+      return this.items.findIndex(item => item.id === id).name;
+    },
+
     parseTask(task) {
       return {
         id: task.id,
-        item: task.name,
+        name: task.name,
         done: task.complete
       }
 

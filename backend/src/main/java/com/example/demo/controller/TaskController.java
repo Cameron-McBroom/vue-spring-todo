@@ -1,11 +1,29 @@
 package com.example.demo.controller;
 
+import ch.qos.logback.core.boolex.EvaluationException;
 import com.example.demo.model.Task;
 import com.example.demo.service.TaskService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.client.HttpClientErrorException;
 
+import javax.lang.model.type.UnknownTypeException;
 import java.util.*;
+import java.util.concurrent.ExecutionException;
+
+
+class NewName {
+    private String name;
+
+    public NewName(String name) {
+        this.name = name;
+    }
+
+    public String getName() {
+        return name;
+    }
+}
+
 
 @CrossOrigin(origins = "http://localhost:8080")
 @RestController
@@ -46,17 +64,18 @@ public class TaskController {
     }
 
     @PostMapping(path = "{id}/update")
-    public Optional<Task> updateTaskName(@PathVariable Long id, @RequestBody String name) {
-        taskService.updateTask(id, name);
-        return taskService.getTaskById(id);
+    public Task updateTaskName(@PathVariable Long id, @RequestBody Map<String, String> taskUpdate) {
+        if (!taskUpdate.containsKey("name")) {
+            return null;
+        }
+        taskService.updateTask(id, taskUpdate.get("name"));
+        return taskService.getTaskById(id).get();
     }
 
     @PutMapping(path = "{id}/{complete}")
-    public Optional<Task> updateComplete(@PathVariable Long id, @PathVariable Boolean complete) {
+    public Task updateComplete(@PathVariable Long id, @PathVariable Boolean complete) {
         taskService.markTaskComplete(id, complete);
-        return taskService.getTaskById(id);
+        return taskService.getTaskById(id).get();
     }
-
-
 }
 
